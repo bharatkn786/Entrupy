@@ -1,42 +1,53 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session, joinedload
 from app.db.database import get_db
 from app.db.models import Product, Listing, PriceHistory
+# from app.auth import get_api_key
 
 router = APIRouter()
 
-# List all products with filters
+
 @router.get("/products")
 def get_products(
     db: Session = Depends(get_db),
-    source: str = Query(None),          # filter by source e.g. grailed
-    category: str = Query(None),        # filter by category
-    min_price: float = Query(None),     # filter by price range
+    source: str = Query(None),
+    category: str = Query(None),
+    min_price: float = Query(None),
     max_price: float = Query(None),
     limit: int = Query(50, le=200),
-    offset: int = Query(0)
+    offset: int = Query(0),
+    # api_key=Depends(get_api_key),
 ):
-    query = db.query(Product)
+    # Build a single joined query so filters and pagination work together
+    query = (
+        db.query(Product)
+        .join(Listing, Listing.product_id == Product.id)
+        .options(joinedload(Product.listings))
+    )
 
     if category:
         query = query.filter(Product.category == category)
+    if source:
+        query = query.filter(Listing.source == source)
+    if min_price is not None:
+        query = query.filter(Listing.current_price >= min_price)
+    if max_price is not None:
+        query = query.filter(Listing.current_price <= max_price)
 
-    products = query.offset(offset).limit(limit).all()
+    # Deduplicate after join, then paginate
+    products = query.distinct().offset(offset).limit(limit).all()
 
     result = []
     for p in products:
-        listings = db.query(Listing).filter_by(product_id=p.id)
-
+        # Filter the already-loaded listings to match requested source/price
+        listings = p.listings
         if source:
-            listings = listings.filter(Listing.source == source)
-        if min_price:
-            listings = listings.filter(Listing.current_price >= min_price)
-        if max_price:
-            listings = listings.filter(Listing.current_price <= max_price)
-
-        listings = listings.all()
-        if not listings:
-            continue
+            listings = [l for l in listings if l.source == source]
+        if min_price is not None:
+            listings = [l for l in listings if l.current_price >= min_price]
+        if max_price is not None:
+            listings = [l for l in listings if l.current_price <= max_price]
 
         result.append({
             "id": p.id,
@@ -49,24 +60,30 @@ def get_products(
                     "source": l.source,
                     "current_price": l.current_price,
                     "currency": l.currency,
-                    "listing_url": l.listing_url
+                    "listing_url": l.listing_url,
                 }
                 for l in listings
-            ]
+            ],
         })
 
     return result
 
 
-# Single product detail
 @router.get("/products/{product_id}")
-def get_product(product_id: int, db: Session = Depends(get_db)):
-    product = db.query(Product).filter_by(id=product_id).first()
+def get_product(
+    product_id: int,
+    db: Session = Depends(get_db),
+    # api_key=Depends(get_api_key),
+):
+    product = (
+        db.query(Product)
+        .options(joinedload(Product.listings))
+        .filter(Product.id == product_id)
+        .first()
+    )
 
     if not product:
-        return {"error": "Product not found"}, 404
-
-    listings = db.query(Listing).filter_by(product_id=product_id).all()
+        raise HTTPException(status_code=404, detail="Product not found")
 
     return {
         "id": product.id,
@@ -80,16 +97,24 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
                 "source": l.source,
                 "current_price": l.current_price,
                 "currency": l.currency,
-                "listing_url": l.listing_url
+                "listing_url": l.listing_url,
             }
-            for l in listings
-        ]
+            for l in product.listings
+        ],
     }
 
 
-# Price history for a product
 @router.get("/products/{product_id}/price-history")
-def get_price_history(product_id: int, db: Session = Depends(get_db)):
+def get_price_history(
+    product_id: int,
+    db: Session = Depends(get_db),
+    # api_key=Depends(get_api_key),
+):
+    # Verify product exists first
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
     listings = db.query(Listing).filter_by(product_id=product_id).all()
     listing_ids = [l.id for l in listings]
 
@@ -105,7 +130,7 @@ def get_price_history(product_id: int, db: Session = Depends(get_db)):
             "listing_id": h.listing_id,
             "old_price": h.old_price,
             "new_price": h.new_price,
-            "observed_at": h.observed_at
+            "observed_at": h.observed_at,
         }
         for h in history
     ]

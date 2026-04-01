@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, UTC
 
 from app.db.models import Product, Listing, PriceHistory
 from app.collectors.normalizers import generate_normalized_key
@@ -73,7 +73,7 @@ def item_listing(db: Session, data)-> bool:
                 "change_pct": round(((data.price - listing.current_price) / listing.current_price) * 100, 2)
             }
             listing.current_price = data.price
-            listing.last_seen_at = datetime.utcnow()
+            listing.last_seen_at = datetime.now(UTC)
             price_changed = True
 
     db.commit() 

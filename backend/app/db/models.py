@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, Index
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -22,8 +22,8 @@ class Product(Base):
     brand_id = Column(String(255), nullable=True)
     category = Column(String(255), nullable=True)
     image_url = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     listings = relationship("Listing", back_populates="product")
 
@@ -50,7 +50,7 @@ class Listing(Base):
     listing_url = Column(Text, nullable=True)
     current_price = Column(Float)
     currency = Column(String(10), default="USD")
-    last_seen_at = Column(DateTime, default=datetime.utcnow)
+    last_seen_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     product = relationship("Product", back_populates="listings")
     price_history = relationship("PriceHistory", back_populates="listing")
@@ -65,7 +65,7 @@ class PriceHistory(Base):
 
     id = Column(Integer, primary_key=True)
     listing_id = Column(Integer, ForeignKey("listings.id"), index=True)
-    observed_at = Column(DateTime, default=datetime.utcnow)
+    observed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     old_price = Column(Float, nullable=True)
     new_price = Column(Float)
 
@@ -74,3 +74,11 @@ class PriceHistory(Base):
     __table_args__ = (
         Index("ix_price_history_listing_observed", "listing_id", "observed_at"),
     )
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+    id = Column(Integer, primary_key=True)
+    key = Column(String(64), unique=True, index=True)
+    name = Column(String(100))
+    request_count = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
