@@ -8,6 +8,7 @@ from app.collectors.normalizers import generate_normalized_key
 def item_listing(db: Session, data)-> bool:
 
     price_changed = False
+    change_detail = None
 
     normalized_key = generate_normalized_key(
         data.brand,
@@ -63,10 +64,17 @@ def item_listing(db: Session, data)-> bool:
                 old_price=listing.current_price,
                 new_price=data.price
             ))
-
+            change_detail = {                    # ← build detail
+                "title": data.title,
+                "source": data.source,
+                "listing_url": data.listing_url,
+                "old_price": listing.current_price,
+                "new_price": data.price,
+                "change_pct": round(((data.price - listing.current_price) / listing.current_price) * 100, 2)
+            }
             listing.current_price = data.price
             listing.last_seen_at = datetime.utcnow()
             price_changed = True
 
     db.commit() 
-    return price_changed
+    return {"changed": price_changed, "detail": change_detail}  # ← return dict

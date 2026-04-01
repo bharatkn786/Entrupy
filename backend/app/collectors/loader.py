@@ -18,21 +18,26 @@ def load_normalized_listings(data_dir: Path) -> list[NormalizedListing]:
     return listings
 
 
-
-def load_all(db: Session) -> dict:          # ← NEW function for refresh
+def load_all(db: Session) -> dict:
     processed = 0
     price_changes = 0
+    changes = []
 
-    # print(f"Looking for JSON files in: {DATA_DIR}")        # ← add this
-    print(f"Files found: {list(DATA_DIR.glob('*.json'))}") 
     for file_path in sorted(DATA_DIR.glob("*.json")):
         try:
             normalized = normalize_file(file_path)
-            changed = item_listing(db, normalized)  # saves to DB, returns True/False
+            result = item_listing(db, normalized)  # ← ONE call, store in result
             processed += 1
-            if changed:
+
+            if result["changed"]:                  # ← use result directly
                 price_changes += 1
+                changes.append(result["detail"])
+
         except Exception as e:
             print(f"Skipping {file_path.name}: {e}")
 
-    return {"processed": processed, "price_changes": price_changes}
+    return {
+        "processed": processed,
+        "price_changes": price_changes,
+        "changes": changes
+    }
