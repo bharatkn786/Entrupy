@@ -26,6 +26,7 @@ def get_price_changes(
     return [
         {
             "listing_id": e.listing_id,
+            "product_id": e.listing.product_id,
             "old_price": e.old_price,
             "new_price": e.new_price,
             "changed_at": e.observed_at,

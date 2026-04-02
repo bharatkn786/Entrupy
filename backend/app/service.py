@@ -65,6 +65,7 @@ def item_listing(db: Session, data)-> bool:
                 new_price=data.price
             ))
             change_detail = {                    # ← build detail
+                "product_id": product.id,  
                 "title": data.title,
                 "source": data.source,
                 "listing_url": data.listing_url,
