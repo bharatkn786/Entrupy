@@ -182,18 +182,23 @@ A lightweight, database-backed API key mechanism with per-key usage tracking. Ch
 ### How does your price history scale? What happens at millions of rows?
 The price_history table uses an append-only design — rows are only ever inserted, never updated, so the complete history of every price change is always preserved.
 To keep queries fast, the table has a composite index on (listing_id, observed_at). Fetching price history for any product stays efficient regardless of how many rows exist — Postgres uses the index directly without scanning the full table.
+
 For future scale, the natural next step is time-based partitioning — splitting the table by month so each query only touches the relevant partition. The current schema supports this without any structural changes.
+
 
 ### How did you implement notification of price changes, and why that approach over alternatives?
 When the user clicks Refresh, the backend loops through all listings, compares each listing's stored price against the incoming data, and writes a new price history record only when the price has actually changed. The changed items are returned directly in the refresh API response.
 On the frontend, the refresh button reads those changes from the response and pushes them into a React context. A banner component listens to that context and immediately renders an alert strip showing what changed, with a direct link to the affected product.
 This is entirely response-driven — no polling, no WebSockets, no background jobs. Change events travel directly from the refresh response into React context and render instantly, with zero extra infrastructure.
+
 Polling was avoided because it fires requests even when nothing has changed, resulting in unnecessary database load. WebSockets were avoided because they add server-side connection management overhead. This approach keeps the entire notification flow tied to a user action — simpler, cheaper, and just as immediate.
+
 
 ### How would you extend this system to 100+ data sources?
 The system is already structured to make this straightforward.
 The NormalizedListing schema acts as a universal contract between any data source and the rest of the system. As long as a new collector outputs a valid NormalizedListing, nothing in the database layer, service layer, or API needs to change.
 The normalizer uses a source-based registry pattern — each source gets its own normalization function, and adding a new source means adding one function and registering it, with no changes to existing code.
+
 The listings table stores source as a plain string column, so new sources add rows, not schema changes. The logic for deduplication, price comparison, and history recording works identically regardless of source.
 For parallelism, since each normalization call is stateless, the collection loop can be wrapped with asyncio or a thread pool to run all sources concurrently — keeping refresh time constant no matter how many sources are added.
 
