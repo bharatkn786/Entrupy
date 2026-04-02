@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from app.db.database import get_db
 from app.db.models import Product, Listing, PriceHistory
-# from app.auth import get_api_key
+from app.auth import get_api_key
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ def get_products(
     max_price: float = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
-    # api_key=Depends(get_api_key),
+    api_key=Depends(get_api_key),
 ):
     # Build a single joined query so filters and pagination work together
     query = (
@@ -73,7 +73,7 @@ def get_products(
 def get_product(
     product_id: int,
     db: Session = Depends(get_db),
-    # api_key=Depends(get_api_key),
+    api_key=Depends(get_api_key),
 ):
     product = (
         db.query(Product)
@@ -108,7 +108,7 @@ def get_product(
 def get_price_history(
     product_id: int,
     db: Session = Depends(get_db),
-    # api_key=Depends(get_api_key),
+    api_key=Depends(get_api_key),
 ):
     # Verify product exists first
     product = db.query(Product).filter(Product.id == product_id).first()
